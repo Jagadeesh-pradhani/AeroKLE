@@ -60,13 +60,6 @@ def get_dstance(cord1, cord2):
     # return distance n meter
     return (geopy.distance.geodesic(cord1, cord2).km) * 1000
 
-RIGHT = 2   # velocity in m/s
-LEFT = -2
-FRONT = 2
-BACK = -2
-UP = -0.5
-DOWN = 0.5
-
 def send_ned_velocity(velocity_z, to_alt):
     msg = vehicle.message_factory.set_position_target_local_ned_encode(
         0,  # time_boot_ms (not used)
@@ -77,12 +70,12 @@ def send_ned_velocity(velocity_z, to_alt):
         0, 0, velocity_z,  # x, y, z velocity in m/s
         0, 0, 0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
         0, 0)  # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
-    
+
     if to_alt == 0:
         vehicle.send_mavlink(msg)
         time.sleep(1)
         return
-    
+
     while True:
         vehicle.send_mavlink(msg)
         print(" Altitude: ", vehicle.location.global_relative_frame.alt)
@@ -91,9 +84,9 @@ def send_ned_velocity(velocity_z, to_alt):
             break
         time.sleep(1)
 
-def displace(lat, lng, theta, distance):
+def to_coord(lat, lng, theta, distance):
     """
-    Displace a LatLng theta degrees counterclockwise and some
+    to_coord a LatLng theta degrees counterclockwise and some
     meters in that direction.
     Notes:
         http://www.movable-type.co.uk/scripts/latlong.html
@@ -128,7 +121,6 @@ def displace(lat, lng, theta, distance):
     lng2 = (lng2 + 3 * np.pi) % (2 * np.pi) - np.pi
 
     return (to_degrees(lat2), to_degrees(lng2))
-
 
 def goto_location(to_lat, to_lon, par):       # wrapped function
     curr_alt = vehicle.location.global_relative_frame.alt
@@ -185,13 +177,42 @@ def target():
     elif a > 320 and b > 240:
         theta = 180 + math.degrees(math.asin((a - 320) / d))
 
+    d = vehicle.location.global_relative_frame.alt * d * 0.0002645833     # convert from pixels to meters
+
+    """ 
+        # 53.5 -> horizontal FOV obtained from Picamera documentation
+        # 41.41 -> vertical FOV obtained from Picamera documentation
+        # x = horizontal extra distance produced at 30 m height
+        # y = vertical extra distance produced at 30 m height
+        x = (vehicle.location.global_relative_frame.alt) * math.tan(53.5) 
+        y = (vehicle.location.global_relative_frame.alt) * math.tan(41.41)
+        a1 = 2 * x + (640 * 0.0002645833)
+        b1 = 2 * y + (480 * 0.0002645833)
+        m = a1/640
+        n = b1/480
+        a = m * a * 0.0002645833
+        b = n * b * 0.0002645833
+        d = math.sqrt((a - a1/2) * (a - a1/2) + (b - b1/2) * (b - b1/2)) 
+    """
+    """
+        # 53.5 -> horizontal FOV obtained from Picamera documentation
+        # 41.41 -> vertical FOV obtained from Picamera documentation
+        a1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(53.5)
+        b1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(41.41)
+        m = a1/640
+        n = b1/480
+        a = m * a * 0.0002645833
+        b = n * b * 0.0002645833
+        d = math.sqrt((a - a1/2) * (a - a1/2) + (b - b1/2) * (b - b1/2))
+    """
+
     lat = vehicle.location.global_relative_frame.lat
     lon = vehicle.location.global_relative_frame.lon
 
-    lat, lon = displace(lat, lon, theta, d)  # get coordinates of target
- 
+    lat, lon = to_coord(lat, lon, theta, d)  # get coordinates of target
+
     goto_location(lat, lon, 1)      # goto target location
-    
+
     send_ned_velocity(DOWN, 20)  # decend to 20 m
     send_ned_velocity(0, 0)    # stop at 20 m
     time.sleep(2)
@@ -201,7 +222,8 @@ def target():
     vehicle.mode = VehicleMode("RTL")       # Return to launch
 
     vehicle.close()
-    
+    exit()
+
 def my_mission():
     arm_and_takeoff(30)
     goto(25.806476, 86.778428)
@@ -209,6 +231,12 @@ def my_mission():
     print("Returning to Launch")
     vehicle.mode = VehicleMode("RTL")
 
+RIGHT = 2   # velocity in m/s
+LEFT = -2
+FRONT = 2
+BACK = -2
+UP = -0.5
+DOWN = 0.5
 
 my_mission()
 
