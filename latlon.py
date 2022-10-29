@@ -125,16 +125,22 @@ def to_coord(lat, lng, theta, distance):
 def goto_location(to_lat, to_lon, par):       # wrapped function
     curr_alt = vehicle.location.global_relative_frame.alt
     to_pont = LocationGlobalRelative(to_lat, to_lon, curr_alt)
-    vehicle.simple_goto(to_pont, groundspeed=2)
+    vehicle.simple_goto(to_pont, groundspeed)
 
     to_cord = (to_lat, to_lon)
     while True:
+        curr_lat = vehicle.location.global_relative_frame.lat
+        curr_lon = vehicle.location.global_relative_frame.lon
+        curr = LocationGlobalRelative(curr_lat, curr_lon, curr_alt)
         if par == 0:
-            a,b,c = eye()
+            a, b, c = eye()
             if c == 1:
+                vehicle.simple_goto(curr, groundspeed)  # stay there
                 x = target()
                 if x != 0:
                     break
+                else:
+                    vehicle.simple_goto(to_pont, groundspeed)    # else continue with wave point
         curr_lat = vehicle.location.global_relative_frame.lat
         curr_lon = vehicle.location.global_relative_frame.lon
         curr_cord = (curr_lat, curr_lon)
@@ -161,71 +167,73 @@ def drop_parcel():
     vehicle.send_mavlink(msg)
     print("parcel dropped...")
 
+def calc(a, b):
+    if a == 320 and b == 240:
+        return (0, 0)
+
+    d_pixels = math.sqrt((a - 320) * (a - 320) + (b - 240) * (b - 240))              # distance between drone and target
+
+    # 53.5 -> horizontal FOV obtained from Picamera documentation
+    # 41.41 -> vertical FOV obtained from Picamera documentation
+    a1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(math.radians(53.5/2))    # horizontal distance in 'm' above 30 m
+    b1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(math.radians(41.41/2))   # vertical distance in 'm' above 30 m
+    m = a1/(640 * 0.0002645833)                                                               # horizontal constant
+    n = b1/(480 * 0.0002645833)
+
+    if a < 320 and b < 240:
+        theta = math.degrees(math.asin((320 - a) / d_pixels))                         # get  angle theta made to target
+        x = ((320 - a) * 0.0002645833) * m                                    # horizontal distance converted to meters
+        y = ((240 - b) * 0.0002645833) * n                                  # vertical distance converted to meters
+        d = math.sqrt((x * x) + (y * y))                                            # total distance to target in meters
+
+    elif a > 320 and b < 240:
+        theta = 360 - math.degrees(math.asin((a - 320) / d_pixels))
+        x = ((a - 320) * 0.0002645833) * m
+        y = ((240 - b) * 0.0002645833) * n
+        d = math.sqrt((x * x) + (y * y))
+
+    elif a < 320 and b > 240:
+        theta = 90 + math.degrees(math.asin((b - 240) / d_pixels))
+        x = ((320 - a) * 0.0002645833) * m
+        y = ((b - 240) * 0.0002645833) * n
+        d = math.sqrt((x * x) + (y * y))
+
+    elif a > 320 and b > 240:
+        theta = 180 + math.degrees(math.asin((a - 320) / d_pixels))
+        x = ((a - 320) * 0.0002645833) * m
+        y = ((b - 240) * 0.0002645833) * n
+        d = math.sqrt((x * x) + (y * y))
+
+    return (theta, d)
+
 def target():
     a, b, c = eye()
-    if c == 0:          # recheck the presence of target
+    if c == 0:                                                                # re-check the presence of target
         return 0
 
-    d = math.sqrt((a - 320) * (a - 320) + (b - 240) * (b - 240))    # distance between drone and target
-
-    if a < 320 and b < 240:         # get  angle theta made to target
-        theta = math.degrees(math.asin((320 - a) / d))
-    elif a > 320 and b < 240:
-        theta = 360 - math.degrees(math.asin((a - 320) / d))
-    elif a < 320 and b > 240:
-        theta = 90 + math.degrees(math.asin((b - 240) / d))
-    elif a > 320 and b > 240:
-        theta = 180 + math.degrees(math.asin((a - 320) / d))
-
-    d = vehicle.location.global_relative_frame.alt * d * 0.0002645833     # convert from pixels to meters
-
-    """ 
-        # 53.5 -> horizontal FOV obtained from Picamera documentation
-        # 41.41 -> vertical FOV obtained from Picamera documentation
-        # x = horizontal extra distance produced at 30 m height
-        # y = vertical extra distance produced at 30 m height
-        x = (vehicle.location.global_relative_frame.alt) * math.tan(53.5) 
-        y = (vehicle.location.global_relative_frame.alt) * math.tan(41.41)
-        a1 = 2 * x + (640 * 0.0002645833)
-        b1 = 2 * y + (480 * 0.0002645833)
-        m = a1/640
-        n = b1/480
-        a = m * a * 0.0002645833
-        b = n * b * 0.0002645833
-        d = math.sqrt((a - a1/2) * (a - a1/2) + (b - b1/2) * (b - b1/2)) 
-    """
-    """
-        # 53.5 -> horizontal FOV obtained from Picamera documentation
-        # 41.41 -> vertical FOV obtained from Picamera documentation
-        a1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(53.5)
-        b1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(41.41)
-        m = a1/640
-        n = b1/480
-        a = m * a * 0.0002645833
-        b = n * b * 0.0002645833
-        d = math.sqrt((a - a1/2) * (a - a1/2) + (b - b1/2) * (b - b1/2))
-    """
+    theta, d = calc(a, b)  # function to find angle and distance to target
 
     lat = vehicle.location.global_relative_frame.lat
     lon = vehicle.location.global_relative_frame.lon
 
-    lat, lon = to_coord(lat, lon, theta, d)  # get coordinates of target
+    if d != 0:
+        lat, lon = to_coord(lat, lon, theta, d)                               # get coordinates of target
+        goto_location(lat, lon, 1)                                            # goto target location
 
-    goto_location(lat, lon, 1)      # goto target location
-
-    send_ned_velocity(DOWN, 20)  # decend to 20 m
-    send_ned_velocity(0, 0)    # stop at 20 m
+    send_ned_velocity(DOWN, 20)                                  # descend to 20 m
+    send_ned_velocity(0, 0)                                                   # stop at 20 m
     time.sleep(2)
-    drop_parcel()     # drop parcel
+    drop_parcel()                                                             # drop parcel
     time.sleep(2)
     print("Mission complete, Returning to Launch")
-    vehicle.mode = VehicleMode("RTL")       # Return to launch
+    vehicle.mode = VehicleMode("RTL")                                         # Return to launch
 
     vehicle.close()
     exit()
 
 def my_mission():
     arm_and_takeoff(30)
+    goto(25.806476, 86.778428)
     goto(25.806476, 86.778428)
     time.sleep(2)
     print("Returning to Launch")
@@ -237,6 +245,7 @@ FRONT = 2
 BACK = -2
 UP = -0.5
 DOWN = 0.5
+groundspeed = 2
 
 my_mission()
 
