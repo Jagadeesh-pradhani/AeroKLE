@@ -12,9 +12,16 @@
       sudo apt-get install python-pip
       sudo apt-get install python-dev
       sudo pip install future
-      sudo apt-get install screen wxgtk libxml libxslt
-      sudo pip install pyserial
-      sudo pip install dronekit
+      sudo apt-get install screen
+      sudo apt-get install python-wxgtk4.*
+      sudo apt-get install libxml 
+      sudo apt-get install libxml2-dev
+      sudo apt-get install libxslt1-dev
+      pip install lxml
+      sudo pip3 install pyserial
+      sudo pip3 install dronekit
+      sudo pip3 install geopy
+      sudo pip3 install MAVProxy
       ```
     4. Set up serial connection, type following in ssh
        ```
