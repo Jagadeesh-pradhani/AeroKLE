@@ -36,6 +36,15 @@
    6. Now connect Pixhawk and Raspberry pi, as shown in,
       ![pi-hawk](https://discuss.ardupilot.org/uploads/default/original/2X/f/f837b6b1116ec02c3490e34035c2f09da5a62936.jpg)
    7. Power the RPI using BEC module.
+      1. check port,
+         ```
+         ls /dev/ttyAMA0
+         ```
+      2. add below two lines at bottom of file ```sudo nano /boot/config.txt``` ,if not there
+         ```
+            enable_uart=1
+            dtoverlay=disable-bt
+         ```
    8. Now type the following to get the telemetry data of pixhawk,
       ```
       mavproxy.py --master=/dev/serial0 --baudrate 921600
