@@ -6,7 +6,7 @@ import time
 import math
 import numpy as np
 import geopy.distance
-from classify import eye
+from classifyMARK3 import eye
 
 # Set up option parsing to get connection string
 import argparse
@@ -173,36 +173,66 @@ def calc(a, b):
 
     d_pixels = math.sqrt((a - 320) * (a - 320) + (b - 240) * (b - 240))              # distance between drone and target
 
-    # 53.5 -> horizontal FOV obtained from Picamera documentation
-    # 41.41 -> vertical FOV obtained from Picamera documentation
-    a1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(math.radians(53.5/2))    # horizontal distance in 'm' above 30 m
-    b1 = 2 * (vehicle.location.global_relative_frame.alt) * math.tan(math.radians(41.41/2))   # vertical distance in 'm' above 30 m
+    # 53.5 -> horizontal FOV obtained from Picamera documentation for 5 mp
+    # 41.41 -> vertical FOV obtained from Picamera documentation for 5 mp
+    # 62.2 -> for 8 mp
+    # 48.8 -> for 8 mp
+    a1 = 2 * vehicle.location.global_relative_frame.alt * math.tan(math.radians(62.2/2))    # horizontal distance in 'm' above 30 m
+    b1 = 2 * vehicle.location.global_relative_frame.alt * math.tan(math.radians(48.8/2))   # vertical distance in 'm' above 30 m
     m = a1/(640 * 0.0002645833)                                                               # horizontal constant
     n = b1/(480 * 0.0002645833)
 
-    if a < 320 and b < 240:
-        theta = math.degrees(math.asin((320 - a) / d_pixels))                         # get  angle theta made to target
-        x = ((320 - a) * 0.0002645833) * m                                    # horizontal distance converted to meters
-        y = ((240 - b) * 0.0002645833) * n                                  # vertical distance converted to meters
-        d = math.sqrt((x * x) + (y * y))                                            # total distance to target in meters
+    if a < 320:
+        if b < 240:
+            theta = math.degrees(math.asin((320 - a) / d_pixels))  # get  angle theta made to target
+            theta = 360 - theta  # angle in clock wise direction
+            x = ((320 - a) * 0.0002645833) * m  # horizontal distance converted to meters
+            y = ((240 - b) * 0.0002645833) * n  # vertical distance converted to meters
+            d = math.sqrt((x * x) + (y * y))  # total distance to target in meters
 
-    elif a > 320 and b < 240:
-        theta = 360 - math.degrees(math.asin((a - 320) / d_pixels))
-        x = ((a - 320) * 0.0002645833) * m
-        y = ((240 - b) * 0.0002645833) * n
-        d = math.sqrt((x * x) + (y * y))
+        elif b > 240:
+            theta = 180 + math.degrees(math.asin((b - 240) / d_pixels))
+            x = ((320 - a) * 0.0002645833) * m
+            y = ((b - 240) * 0.0002645833) * n
+            d = math.sqrt((x * x) + (y * y))
 
-    elif a < 320 and b > 240:
-        theta = 90 + math.degrees(math.asin((b - 240) / d_pixels))
-        x = ((320 - a) * 0.0002645833) * m
-        y = ((b - 240) * 0.0002645833) * n
-        d = math.sqrt((x * x) + (y * y))
+        elif b == 240:
+            theta = 270
+            x = ((320 - a) * 0.0002645833) * m
+            y = 0
+            d = math.sqrt((x * x) + (y * y))
 
-    elif a > 320 and b > 240:
-        theta = 180 + math.degrees(math.asin((a - 320) / d_pixels))
-        x = ((a - 320) * 0.0002645833) * m
-        y = ((b - 240) * 0.0002645833) * n
-        d = math.sqrt((x * x) + (y * y))
+    elif a > 320:
+        if b < 240:
+            theta = math.degrees(math.asin((a - 320) / d_pixels))
+            x = ((a - 320) * 0.0002645833) * m
+            y = ((240 - b) * 0.0002645833) * n
+            d = math.sqrt((x * x) + (y * y))
+
+        elif b > 240:
+            theta = 180 - math.degrees(math.asin((a - 320) / d_pixels))
+            x = ((a - 320) * 0.0002645833) * m
+            y = ((b - 240) * 0.0002645833) * n
+            d = math.sqrt((x * x) + (y * y))
+
+        elif b == 240:
+            theta = 90
+            x = ((a - 320) * 0.0002645833) * m
+            y = 0
+            d = math.sqrt((x * x) + (y * y))
+
+    elif a == 320:
+        if b == 0:
+            theta = 0
+            x = 0
+            y = 240 * 0.0002645833 * n
+            d = math.sqrt((x * x) + (y * y))
+        
+        elif b == 480:
+            theta = 180
+            x = 0
+            y = ((b - 240) * 0.0002645833) * n
+            d = math.sqrt((x * x) + (y * y))
 
     return (theta, d)
 
@@ -220,7 +250,7 @@ def target():
         lat, lon = to_coord(lat, lon, theta, d)                               # get coordinates of target
         goto_location(lat, lon, 1)                                            # goto target location
 
-    send_ned_velocity(DOWN, 20)                                  # descend to 20 m
+    send_ned_velocity(DOWN, 20)                                                   # descend to 20 m
     send_ned_velocity(0, 0)                                                   # stop at 20 m
     time.sleep(2)
     drop_parcel()                                                             # drop parcel
@@ -233,19 +263,18 @@ def target():
 
 def my_mission():
     arm_and_takeoff(30)
-    goto(25.806476, 86.778428)
-    goto(25.806476, 86.778428)
+    goto(25.6898, 82.2646)
     time.sleep(2)
-    print("Returning to Launch")
+    print("no target detected : Returning to Launch")
     vehicle.mode = VehicleMode("RTL")
 
-RIGHT = 2   # velocity in m/s
+RIGHT = 2                 # velocity in m/s
 LEFT = -2
 FRONT = 2
 BACK = -2
 UP = -0.5
 DOWN = 0.5
-groundspeed = 2
+groundspeed = 1.5
 
 my_mission()
 
